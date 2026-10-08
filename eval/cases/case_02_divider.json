@@ -1,0 +1,17 @@
+{
+  "id": "case_02",
+  "name": "12V Divider 2k-1k",
+  "image_path": "samples/case_02.jpg",
+  "true_netlist": {
+    "components": [
+      {"id": "V1", "type": "V", "value": 12.0, "nodes": ["N1", "0"]},
+      {"id": "R1", "type": "R", "value": 2000.0, "nodes": ["N1", "N2"]},
+      {"id": "R2", "type": "R", "value": 1000.0, "nodes": ["N2", "0"]}
+    ]
+  },
+  "expected_voltages": {
+    "N1": 12.0,
+    "N2": 4.0,
+    "0": 0.0
+  }
+}

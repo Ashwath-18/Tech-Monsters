@@ -1,0 +1,17 @@
+{
+  "id": "case_01",
+  "name": "10V Series 1k-1k",
+  "image_path": "samples/case_01.jpg",
+  "true_netlist": {
+    "components": [
+      {"id": "V1", "type": "V", "value": 10.0, "nodes": ["N1", "0"]},
+      {"id": "R1", "type": "R", "value": 1000.0, "nodes": ["N1", "N2"]},
+      {"id": "R2", "type": "R", "value": 1000.0, "nodes": ["N2", "0"]}
+    ]
+  },
+  "expected_voltages": {
+    "N1": 10.0,
+    "N2": 5.0,
+    "0": 0.0
+  }
+}

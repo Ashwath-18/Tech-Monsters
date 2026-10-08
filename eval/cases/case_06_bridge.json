@@ -1,0 +1,21 @@
+{
+  "id": "case_06",
+  "name": "10V Balanced Wheatstone Bridge",
+  "image_path": "samples/case_06.jpg",
+  "true_netlist": {
+    "components": [
+      {"id": "V1", "type": "V", "value": 10.0, "nodes": ["N1", "0"]},
+      {"id": "R1", "type": "R", "value": 1000.0, "nodes": ["N1", "N2"]},
+      {"id": "R2", "type": "R", "value": 2000.0, "nodes": ["N2", "0"]},
+      {"id": "R3", "type": "R", "value": 2000.0, "nodes": ["N1", "N3"]},
+      {"id": "R4", "type": "R", "value": 4000.0, "nodes": ["N3", "0"]},
+      {"id": "Rg", "type": "R", "value": 500.0, "nodes": ["N2", "N3"]}
+    ]
+  },
+  "expected_voltages": {
+    "N1": 10.0,
+    "N2": 6.667,
+    "N3": 6.667,
+    "0": 0.0
+  }
+}

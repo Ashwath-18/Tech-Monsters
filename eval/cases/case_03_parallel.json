@@ -1,0 +1,16 @@
+{
+  "id": "case_03",
+  "name": "10V Parallel 1k||1k",
+  "image_path": "samples/case_03.jpg",
+  "true_netlist": {
+    "components": [
+      {"id": "V1", "type": "V", "value": 10.0, "nodes": ["N1", "0"]},
+      {"id": "R1", "type": "R", "value": 1000.0, "nodes": ["N1", "0"]},
+      {"id": "R2", "type": "R", "value": 1000.0, "nodes": ["N1", "0"]}
+    ]
+  },
+  "expected_voltages": {
+    "N1": 10.0,
+    "0": 0.0
+  }
+}

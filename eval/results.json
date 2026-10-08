@@ -1,0 +1,50 @@
+{
+  "total_cases": 6,
+  "netlist_exact_match_pct": 16.67,
+  "solved_answer_match_pct": 16.67,
+  "repaired_count": 0,
+  "details": [
+    {
+      "case_id": "case_01",
+      "name": "10V Series 1k-1k",
+      "netlist_exact_match": false,
+      "voltage_exact_match": false,
+      "repaired_by_loop": false
+    },
+    {
+      "case_id": "case_02",
+      "name": "12V Divider 2k-1k",
+      "netlist_exact_match": true,
+      "voltage_exact_match": true,
+      "repaired_by_loop": false
+    },
+    {
+      "case_id": "case_03",
+      "name": "10V Parallel 1k||1k",
+      "netlist_exact_match": false,
+      "voltage_exact_match": false,
+      "repaired_by_loop": false
+    },
+    {
+      "case_id": "case_04",
+      "name": "12V Series-Parallel 4k + (6k||3k)",
+      "netlist_exact_match": false,
+      "voltage_exact_match": false,
+      "repaired_by_loop": false
+    },
+    {
+      "case_id": "case_05",
+      "name": "Current Source 2mA into 5k",
+      "netlist_exact_match": false,
+      "voltage_exact_match": false,
+      "repaired_by_loop": false
+    },
+    {
+      "case_id": "case_06",
+      "name": "10V Balanced Wheatstone Bridge",
+      "netlist_exact_match": false,
+      "voltage_exact_match": false,
+      "repaired_by_loop": false
+    }
+  ]
+}

@@ -3,101 +3,521 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>VyaparLens - Handwritten Bill to Digital Ledger</title>
-  <style>
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      max-width: 800px;
-      margin: 40px auto;
-      padding: 0 20px;
-      line-height: 1.6;
-      color: #333;
-    }
-    h1 {
-      color: #111;
-      margin-bottom: 8px;
-    }
-    p.subtitle {
-      color: #666;
-      margin-top: 0;
-      margin-bottom: 24px;
-    }
-    .upload-box {
-      border: 2px dashed #ccc;
-      border-radius: 8px;
-      padding: 32px;
-      text-align: center;
-      background: #fafafa;
-      margin-bottom: 24px;
-    }
-    button {
-      background: #2563eb;
-      color: white;
-      border: none;
-      padding: 10px 20px;
-      font-size: 16px;
-      border-radius: 6px;
-      cursor: pointer;
-      margin-top: 12px;
-    }
-    button:hover {
-      background: #1d4ed8;
-    }
-    #results {
-      margin-top: 24px;
-      padding: 16px;
-      border: 1px solid #e5e7eb;
-      border-radius: 6px;
-      background: #fff;
-      display: none;
-    }
-  </style>
+  <title>CircuitCheck — Hand-Drawn DC Circuit to Verified MNA Analysis</title>
+  <meta name="description" content="Digitize hand-drawn DC circuit schematics into verified Modified Nodal Analysis (MNA) with multimodal AI, topological validation, and interactive circuit explorer." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <h1>VyaparLens</h1>
-  <p class="subtitle">Handwritten Indian Bill to Audited Digital Ledger</p>
+  <!-- Ambient Background Glows -->
+  <div class="glow-orb glow-top-left"></div>
+  <div class="glow-orb glow-bottom-right"></div>
 
-  <div class="upload-box">
-    <input type="file" id="billInput" accept="image/*" />
-    <br />
-    <button id="uploadBtn">Upload & Extract</button>
+  <div class="app-container">
+    <!-- Header -->
+    <header class="app-header">
+      <div class="header-content">
+        <div class="logo-group">
+          <div class="logo-badge">
+            <svg class="logo-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+            </svg>
+          </div>
+          <div>
+            <div class="title-row">
+              <h1>CircuitCheck</h1>
+              <span class="version-tag">v2.0 Pro</span>
+            </div>
+            <p class="subtitle">Hand-drawn DC schematic digitization &amp; verified Modified Nodal Analysis (MNA)</p>
+          </div>
+        </div>
+
+        <div class="header-actions">
+          <div class="header-badges">
+            <span class="badge badge-gemma">
+              <span class="pulse-dot"></span>
+              Gemma Multimodal Vision
+            </span>
+            <span class="badge badge-mna">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>
+              NumPy MNA Matrix Engine
+            </span>
+            <span class="badge badge-status" id="apiStatusBadge">
+              <span class="status-indicator-dot" id="apiStatusDot"></span>
+              <span id="apiStatusText">Checking API...</span>
+            </span>
+          </div>
+          <button id="quickGuideBtn" class="btn btn-icon-subtle" title="Usage Guide">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+            <span>Guide</span>
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main Grid -->
+    <main class="dashboard-grid">
+      <!-- Left Column: Input & Schematic -->
+      <section class="panel input-panel">
+        <div class="panel-header">
+          <div class="panel-title-group">
+            <span class="step-num">1</span>
+            <div>
+              <h2>Input Schematic</h2>
+              <span class="helper-text">Hand-drawn DC circuit photo or image clip</span>
+            </div>
+          </div>
+          <button id="clearInputBtn" class="btn btn-ghost btn-sm" style="display: none;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+            Clear
+          </button>
+        </div>
+
+        <!-- Upload Dropzone -->
+        <div class="upload-dropzone" id="dropzone">
+          <input type="file" id="fileInput" accept="image/*" />
+          <div class="dropzone-content" id="dropzonePrompt">
+            <div class="upload-icon-wrapper">
+              <svg class="upload-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                <polyline points="17 8 12 3 7 8"></polyline>
+                <line x1="12" y1="3" x2="12" y2="15"></line>
+              </svg>
+            </div>
+            <p class="drop-primary-text">Drag &amp; drop hand-drawn circuit photo</p>
+            <p class="drop-secondary-text">or <span class="highlight-browse">browse file</span> from your device</p>
+            <div class="clipboard-tip">
+              <kbd>Ctrl</kbd> + <kbd>V</kbd> paste clipboard screenshot supported
+            </div>
+          </div>
+
+          <!-- Image Preview Area -->
+          <div class="preview-wrapper" id="previewWrapper" style="display: none;">
+            <img id="previewImage" class="preview-img" alt="Schematic Preview" />
+            <div class="preview-overlay">
+              <button id="zoomBtn" class="preview-action-btn" title="Inspect Fullscreen">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line><line x1="11" y1="8" x2="11" y2="14"></line><line x1="8" y1="11" x2="14" y2="11"></line></svg>
+                Zoom
+              </button>
+              <button id="replaceBtn" class="preview-action-btn" title="Replace Image">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+                Replace
+              </button>
+            </div>
+            <div class="preview-info-tag" id="previewInfoTag">Image Loaded</div>
+          </div>
+        </div>
+
+        <!-- Action Button -->
+        <button id="analyzeBtn" class="btn btn-primary btn-block btn-lg" disabled>
+          <span class="btn-icon">⚡</span>
+          <span class="btn-text">Digitize &amp; Solve Circuit</span>
+          <span class="spinner" id="analyzeSpinner" style="display: none;"></span>
+        </button>
+
+        <!-- Verified Test Samples Gallery -->
+        <div class="sample-circuits-section">
+          <div class="section-label-row">
+            <span class="section-label">Verified Test Bench Library</span>
+            <span class="section-badge">6 Presets</span>
+          </div>
+          <div class="sample-grid">
+            <button class="sample-card" data-sample="case_a" id="sample-case_a">
+              <div class="sample-card-icon">⚡</div>
+              <div class="sample-card-body">
+                <div class="sample-card-title">Case 1: 10V Series (1k-1k)</div>
+                <div class="sample-card-desc">Voltage divider with equal 1kΩ resistors</div>
+              </div>
+              <span class="sample-val-tag">10V · 2 Nodes</span>
+            </button>
+
+            <button class="sample-card" data-sample="case_b" id="sample-case_b">
+              <div class="sample-card-icon">📊</div>
+              <div class="sample-card-body">
+                <div class="sample-card-title">Case 2: 12V Divider (2k-1k)</div>
+                <div class="sample-card-desc">2:1 voltage divider (8V &amp; 4V drops)</div>
+              </div>
+              <span class="sample-val-tag">12V · 4.0V Out</span>
+            </button>
+
+            <button class="sample-card" data-sample="case_c" id="sample-case_c">
+              <div class="sample-card-icon">🔀</div>
+              <div class="sample-card-body">
+                <div class="sample-card-title">Case 3: 10V Parallel (1k || 1k)</div>
+                <div class="sample-card-desc">Dual branch current division (20mA total)</div>
+              </div>
+              <span class="sample-val-tag">10V · 20mA</span>
+            </button>
+
+            <button class="sample-card" data-sample="case_d" id="sample-case_d">
+              <div class="sample-card-icon">⚙️</div>
+              <div class="sample-card-body">
+                <div class="sample-card-title">Case 4: 12V Series-Parallel</div>
+                <div class="sample-card-desc">4kΩ in series with (6kΩ || 3kΩ)</div>
+              </div>
+              <span class="sample-val-tag">12V · 3 Resistors</span>
+            </button>
+
+            <button class="sample-card" data-sample="case_e" id="sample-case_e">
+              <div class="sample-card-icon">🔋</div>
+              <div class="sample-card-body">
+                <div class="sample-card-title">Case 5: Current Source 2mA</div>
+                <div class="sample-card-desc">Ideal 2mA source driving 5kΩ resistor</div>
+              </div>
+              <span class="sample-val-tag">2mA · 10V</span>
+            </button>
+
+            <button class="sample-card" data-sample="case_f" id="sample-case_f">
+              <div class="sample-card-icon">💎</div>
+              <div class="sample-card-body">
+                <div class="sample-card-title">Case 6: Wheatstone Bridge</div>
+                <div class="sample-card-desc">Balanced bridge network with zero bridge current</div>
+              </div>
+              <span class="sample-val-tag">10V · 5 Resistors</span>
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Right Column: Verification & Solved Analysis -->
+      <section class="panel results-panel">
+        <div class="panel-header">
+          <div class="panel-title-group">
+            <span class="step-num step-num-purple">2</span>
+            <div>
+              <h2>Verified Analysis &amp; Simulation</h2>
+              <span class="helper-text" id="analysisSubtitle">Awaiting schematic input</span>
+            </div>
+          </div>
+          <div class="tabs">
+            <button class="tab-btn active" data-tab="analysisTab">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
+              <span>Dashboard</span>
+            </button>
+            <button class="tab-btn" data-tab="schematicTab">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="3" y1="9" x2="21" y2="9"></line><line x1="9" y1="21" x2="9" y2="9"></line></svg>
+              <span>Visual Schematic</span>
+            </button>
+            <button class="tab-btn" data-tab="netlistTab">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg>
+              <span>Netlist JSON</span>
+            </button>
+            <button class="tab-btn" data-tab="repairTab">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path></svg>
+              <span>Repair Log</span>
+              <span id="repairCountBadge" class="count-badge">0</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Initial Placeholder -->
+        <div id="emptyState" class="empty-state">
+          <div class="empty-icon-glow">
+            <div class="empty-icon-inner">📐</div>
+          </div>
+          <h3>Ready for Circuit Digitization</h3>
+          <p>Upload a hand-drawn DC schematic photo, paste from clipboard (<kbd>Ctrl+V</kbd>), or pick any verified test case on the left to start deterministic MNA analysis.</p>
+          <div class="empty-features-row">
+            <div class="feature-chip">✓ Multimodal OCR &amp; Vision</div>
+            <div class="feature-chip">✓ Topological Self-Repair</div>
+            <div class="feature-chip">✓ Modified Nodal Analysis</div>
+            <div class="feature-chip">✓ AI Diagnostic Homework Tutor</div>
+          </div>
+        </div>
+
+        <!-- Analysis Tab -->
+        <div id="analysisTab" class="tab-content" style="display: none;">
+          <!-- Validation Status Banner -->
+          <div id="statusBanner" class="status-banner banner-success">
+            <div class="banner-icon-box" id="statusIconBox">
+              <svg id="statusIconSvg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+            </div>
+            <div class="banner-text">
+              <h4 id="statusTitle">Circuit Solved &amp; Verified</h4>
+              <p id="statusDesc">Deterministic topological and electrical checks passed with 0 errors.</p>
+            </div>
+            <div class="banner-meta" id="bannerMeta">
+              <span class="meta-tag">KCL/KVL Exact</span>
+            </div>
+          </div>
+
+          <!-- Uncertain Warnings Box -->
+          <div id="uncertainBox" class="alert-box alert-warning" style="display: none;">
+            <div class="alert-header">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+              <strong>Gemma Flagged Uncertainties:</strong>
+            </div>
+            <ul id="uncertainList" class="alert-list"></ul>
+          </div>
+
+          <!-- KPI Summary Cards -->
+          <div class="kpi-grid">
+            <div class="kpi-card">
+              <div class="kpi-label">Total Dissipated Power</div>
+              <div class="kpi-value" id="kpiTotalPower">0.00 mW</div>
+              <div class="kpi-sub" id="kpiPowerSub">Σ (I² · R) in resistors</div>
+            </div>
+            <div class="kpi-card">
+              <div class="kpi-label">Active Circuit Nodes</div>
+              <div class="kpi-value" id="kpiNodeCount">0</div>
+              <div class="kpi-sub">Ref: Node 0 (GND = 0V)</div>
+            </div>
+            <div class="kpi-card">
+              <div class="kpi-label">Total Branches</div>
+              <div class="kpi-value" id="kpiCompCount">0</div>
+              <div class="kpi-sub" id="kpiCompBreakdown">R, V, I components</div>
+            </div>
+            <div class="kpi-card">
+              <div class="kpi-label">Max Node Potential</div>
+              <div class="kpi-value" id="kpiMaxVoltage">0.00 V</div>
+              <div class="kpi-sub" id="kpiMaxNodeName">Peak voltage node</div>
+            </div>
+          </div>
+
+          <!-- Node Voltages Card -->
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title-group">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#00f0ff" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+                <h3>Node Voltages (MNA Solved Potentials)</h3>
+              </div>
+              <span class="card-sub">Reference Ground: Node 0 = 0.000 V</span>
+            </div>
+            <div class="node-grid" id="nodeVoltagesGrid">
+              <!-- Dynamically populated -->
+            </div>
+          </div>
+
+          <!-- Component Currents & Power Table -->
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title-group">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
+                <h3>Branch Analysis (Voltages, Currents &amp; Power)</h3>
+              </div>
+              <div class="table-actions">
+                <input type="text" id="tableFilterInput" class="table-search" placeholder="Filter component..." />
+                <button id="exportCsvBtn" class="btn btn-ghost btn-sm" title="Export CSV Data">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                  Export CSV
+                </button>
+              </div>
+            </div>
+            <div class="table-responsive">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Component</th>
+                    <th>Type</th>
+                    <th>Nominal Value</th>
+                    <th>Node Terminals</th>
+                    <th>Voltage Drop (ΔV)</th>
+                    <th>Current (I)</th>
+                    <th>Power (P)</th>
+                  </tr>
+                </thead>
+                <tbody id="componentTableBody">
+                  <!-- Dynamically populated -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Student Answer Verifier -->
+          <div class="card student-check-card">
+            <div class="card-header">
+              <div class="card-title-group">
+                <span class="grad-icon">🎓</span>
+                <div>
+                  <h3>Student Homework &amp; Calculation Verifier</h3>
+                  <span class="card-sub">Verify your manual calculation claim against deterministic MNA with diagnostic AI feedback</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Quick Claim Preset Chips -->
+            <div class="quick-chips-row">
+              <span class="chips-label">Quick test claims:</span>
+              <button class="claim-chip" data-claim="Node N2 voltage is 5.0V">V(N2) = 5.0V</button>
+              <button class="claim-chip" data-claim="Current in R1 is 5mA">I(R1) = 5mA</button>
+              <button class="claim-chip" data-claim="Node N2 voltage is 4.0V">V(N2) = 4.0V</button>
+              <button class="claim-chip" data-claim="Total dissipated power is 50mW">P_total = 50mW</button>
+              <button class="claim-chip" data-claim="Node N1 voltage is 12V">V(N1) = 12V</button>
+            </div>
+
+            <div class="student-input-row">
+              <div class="input-with-icon">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                <input type="text" id="studentClaimInput" placeholder="e.g. Node N2 voltage is 4.0V (or Current through R1 is 2mA)" />
+              </div>
+              <button id="checkAnswerBtn" class="btn btn-secondary">
+                <span>Check Answer</span>
+                <span class="spinner-sm" id="checkSpinner" style="display: none;"></span>
+              </button>
+            </div>
+            
+            <div id="studentFeedbackBox" class="feedback-box" style="display: none;">
+              <div class="feedback-header">
+                <div class="feedback-title-group">
+                  <span class="feedback-icon" id="feedbackIcon">💡</span>
+                  <h4 id="feedbackTitle">Diagnostic Evaluation</h4>
+                </div>
+                <button id="closeFeedbackBtn" class="btn-close-sm">&times;</button>
+              </div>
+              <p id="studentFeedbackText"></p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Schematic Tab -->
+        <div id="schematicTab" class="tab-content" style="display: none;">
+          <div class="card schematic-view-card">
+            <div class="card-header">
+              <div class="card-title-group">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#00f0ff" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="3" y1="9" x2="21" y2="9"></line><line x1="9" y1="21" x2="9" y2="9"></line></svg>
+                <h3>Interactive Synthesized Circuit Schematic</h3>
+              </div>
+              <span class="card-sub">Hover components or nodes to inspect values</span>
+            </div>
+            <div class="schematic-container" id="schematicContainer">
+              <!-- SVG Schematic Rendered dynamically -->
+            </div>
+            <div class="schematic-legend">
+              <div class="legend-item"><span class="legend-color legend-source"></span> DC Sources (V/I)</div>
+              <div class="legend-item"><span class="legend-color legend-resistor"></span> Resistors (R)</div>
+              <div class="legend-item"><span class="legend-color legend-node"></span> Circuit Nodes</div>
+              <div class="legend-item"><span class="legend-color legend-gnd"></span> Ground (0)</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Netlist JSON Tab -->
+        <div id="netlistTab" class="tab-content" style="display: none;">
+          <div class="card">
+            <div class="netlist-toolbar">
+              <div class="toolbar-info">
+                <strong>Raw Netlist JSON</strong>
+                <span>Edit components and click Re-Solve to run modified MNA simulation</span>
+              </div>
+              <div class="toolbar-btn-group">
+                <button id="copyNetlistBtn" class="btn btn-secondary btn-sm" title="Copy JSON">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                  Copy JSON
+                </button>
+                <button id="downloadNetlistBtn" class="btn btn-secondary btn-sm" title="Download JSON file">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                  Download
+                </button>
+                <button id="reSolveBtn" class="btn btn-primary btn-sm">
+                  ⚡ Re-Solve with MNA
+                </button>
+              </div>
+            </div>
+            <div class="editor-wrapper">
+              <textarea id="netlistEditor" class="code-editor" rows="18" spellcheck="false"></textarea>
+            </div>
+          </div>
+        </div>
+
+        <!-- Repair Log Tab -->
+        <div id="repairTab" class="tab-content" style="display: none;">
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title-group">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 14 14"></polyline></svg>
+                <h3>Multi-Round Closed-Loop Repair Audit Trail</h3>
+              </div>
+              <span class="card-sub">AI Vision &rarr; Topological Audit &rarr; Correction</span>
+            </div>
+            <div id="repairTimeline" class="timeline">
+              <!-- Dynamically populated repair rounds -->
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
   </div>
 
-  <div id="results">
-    <h3>Extraction Results</h3>
-    <pre id="outputJson">Results will appear here...</pre>
+  <!-- Zoom Image Modal -->
+  <div id="zoomModal" class="modal-backdrop" style="display: none;">
+    <div class="modal-dialog modal-image-dialog">
+      <div class="modal-header">
+        <h3>Schematic High-Resolution Inspection</h3>
+        <button id="closeZoomModalBtn" class="btn-close">&times;</button>
+      </div>
+      <div class="modal-body modal-image-body">
+        <img id="modalZoomImg" class="modal-zoom-img" alt="Zoomed Schematic" />
+      </div>
+    </div>
   </div>
 
-  <script>
-    const uploadBtn = document.getElementById("uploadBtn");
-    const billInput = document.getElementById("billInput");
-    const results = document.getElementById("results");
-    const outputJson = document.getElementById("outputJson");
+  <!-- Quick Guide Modal -->
+  <div id="guideModal" class="modal-backdrop" style="display: none;">
+    <div class="modal-dialog modal-guide-dialog">
+      <div class="modal-header">
+        <div class="guide-title-row">
+          <span class="guide-icon">📖</span>
+          <h3>CircuitCheck Quick Reference Guide</h3>
+        </div>
+        <button id="closeGuideModalBtn" class="btn-close">&times;</button>
+      </div>
+      <div class="modal-body guide-content">
+        <div class="guide-section">
+          <h4>Supported Circuit Elements (DC Only)</h4>
+          <div class="guide-grid">
+            <div class="guide-card">
+              <div class="guide-card-icon">⚡</div>
+              <strong>Voltage Sources (V)</strong>
+              <p>Independent DC voltage supplies. Format: <code>10V</code>, <code>12V</code>, <code>5V</code>. Nodes: <code>[V+, V-]</code>.</p>
+            </div>
+            <div class="guide-card">
+              <div class="guide-card-icon">〰️</div>
+              <strong>Resistors (R)</strong>
+              <p>Linear Ohm values. Supports standard metric prefixes: <code>1kΩ</code> (1000Ω), <code>4.7k</code>, <code>1MΩ</code>, <code>100Ω</code>.</p>
+            </div>
+            <div class="guide-card">
+              <div class="guide-card-icon">🔋</div>
+              <strong>Current Sources (I)</strong>
+              <p>Ideal DC current branches. Supports: <code>2mA</code> (0.002A), <code>10uA</code>, <code>1A</code>. Nodes: <code>[from, to]</code>.</p>
+            </div>
+            <div class="guide-card">
+              <div class="guide-card-icon">⏚</div>
+              <strong>Ground Reference (0)</strong>
+              <p>Circuit reference ground MUST be labeled <code>0</code> or drawn with standard 3-bar ground symbol.</p>
+            </div>
+          </div>
+        </div>
 
-    uploadBtn.addEventListener("click", async () => {
-      if (!billInput.files.length) {
-        alert("Please select a bill image first.");
-        return;
-      }
+        <div class="guide-section">
+          <h4>Workflow Pipeline</h4>
+          <div class="workflow-steps">
+            <div class="wf-step">
+              <div class="wf-num">1</div>
+              <div><strong>Capture / Upload</strong>: Take a clear photo of your hand-drawn notebook circuit or pick a test bench preset.</div>
+            </div>
+            <div class="wf-step">
+              <div class="wf-num">2</div>
+              <div><strong>Multimodal Extraction</strong>: Gemma parses components, node labels, and wire junctions into netlist JSON.</div>
+            </div>
+            <div class="wf-step">
+              <div class="wf-num">3</div>
+              <div><strong>Topological Validation &amp; Repair</strong>: Deterministic graph checks verify ground connectivity, single components per node, and no shorted ideal sources.</div>
+            </div>
+            <div class="wf-step">
+              <div class="wf-num">4</div>
+              <div><strong>MNA Matrix Solution</strong>: Solves linear conductance matrix $[G] \cdot [V] = [I]$ with NumPy.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
 
-      const file = billInput.files[0];
-      const formData = new FormData();
-      formData.append("file", file);
+  <!-- Toast Container -->
+  <div id="toastContainer" class="toast-container"></div>
 
-      outputJson.textContent = "Processing bill with Gemma...";
-      results.style.display = "block";
-
-      try {
-        const res = await fetch("http://localhost:8000/extract", {
-          method: "POST",
-          body: formData,
-        });
-        const data = await res.json();
-        outputJson.textContent = JSON.stringify(data, null, 2);
-      } catch (err) {
-        outputJson.textContent = "Error: " + err.message;
-      }
-    });
-  </script>
+  <script src="app.js"></script>
 </body>
 </html>
