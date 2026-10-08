@@ -544,54 +544,44 @@ analyzeBtn.addEventListener("click", async () => {
       const res = await fetch(`${API_BASE}/api/read`, {
         method: "POST",
         body: formData,
-        signal: AbortSignal.timeout(18000)
+        signal: AbortSignal.timeout(180000)
       });
       if (!res.ok) {
-        const err = await res.json().catch(() => ({ detail: `Server returned status ${res.status}` }));
-        throw new Error(err.detail || "Analysis failed");
+        const err = await res.json().catch(() => ({ detail: `Server HTTP ${res.status}: ${res.statusText}` }));
+        throw new Error(err.detail || `Server returned error ${res.status}`);
       }
       const data = await res.json();
       currentAnalysisData = data;
       renderAnalysis(data);
-      showToast("Schematic digitized & solved successfully!", "success");
+      if (data.code === "OK") {
+        showToast("Schematic digitized & solved successfully!", "success");
+      } else {
+        showToast(`[${data.code}] ${data.message}`, "error");
+      }
     } catch (err) {
-      showToast("Analysis notice: " + err.message, "error");
-      
-      // If user uploaded a custom circuit while backend is unreachable or parsing failed,
-      // present a helpful diagnostic state in the analysis dashboard rather than freezing
-      const fallbackNetlist = {
-        components: [
-          { id: "V1", type: "V", value: 9.0, nodes: ["N1", "0"] },
-          { id: "R1", type: "R", value: 1000.0, nodes: ["N1", "N2"] },
-          { id: "R2", type: "R", value: 2000.0, nodes: ["N2", "0"] }
-        ],
-        uncertain: [
-          `Uploaded schematic (${currentFile.name || 'image'}) could not be parsed automatically.`,
-          "CircuitCheck strictly supports linear DC elements: Resistors (R), Voltage Sources (V), and Current Sources (I).",
-          "You can edit the Netlist JSON tab directly and click 'Re-Solve' to simulate any custom circuit!"
-        ]
-      };
+      const isTimeout = err.name === "TimeoutError" || err.message.toLowerCase().includes("timeout");
+      const errCode = isTimeout ? "TIMEOUT" : "API_ERROR";
+      const errMsg = isTimeout 
+        ? "Schematic extraction request timed out after waiting for model response." 
+        : `Network / server error: ${err.message}`;
+
+      showToast(`[${errCode}] ${errMsg}`, "error");
 
       currentAnalysisData = {
-        final_netlist: fallbackNetlist,
-        solved: {
-          node_voltages: { "0": 0.0, "N1": 9.0, "N2": 6.0 },
-          components: [
-            { id: "V1", type: "V", value: 9.0, nodes: ["N1", "0"], voltage_drop: 9.0, current: 0.003, power: 0.027 },
-            { id: "R1", type: "R", value: 1000.0, nodes: ["N1", "N2"], voltage_drop: 3.0, current: 0.003, power: 0.009 },
-            { id: "R2", type: "R", value: 2000.0, nodes: ["N2", "0"], voltage_drop: 6.0, current: 0.003, power: 0.018 }
-          ],
-          total_resistor_power: 0.027
+        code: errCode,
+        message: errMsg,
+        final_netlist: {
+          components: [],
+          uncertain: [errMsg]
         },
+        solved: null,
         is_valid: false,
-        validation_errors: [
-          err.name === "TimeoutError" 
-            ? "Extraction request timed out. Switched to editable netlist mode." 
-            : `Digitization note: ${err.message}. Linear DC template loaded for manual netlist editing.`
-        ],
+        validation_errors: [errMsg],
+        solver_error: errMsg,
         rounds_log: [
-          { round: 1, action: "vision_extraction_attempt", passed: false, validation_errors: [err.message] }
-        ]
+          { round: 1, action: "vision_extraction", passed: false, error: errCode, validation_errors: [errMsg] }
+        ],
+        repairs_needed: 0
       };
       renderAnalysis(currentAnalysisData);
     } finally {
@@ -614,28 +604,103 @@ analyzeBtn.addEventListener("click", async () => {
   }
 });
 
+// Real KCL & Power Conservation Verifier
+function checkKclKvlExact(solved) {
+  if (!solved || !solved.components || !solved.node_voltages) return false;
+  const nodeCurrents = {};
+  let sourcePower = 0;
+  let resistorPower = 0;
+
+  for (const comp of solved.components) {
+    if (!comp.nodes || comp.nodes.length !== 2) continue;
+    const n1 = String(comp.nodes[0]);
+    const n2 = String(comp.nodes[1]);
+    const i = Number(comp.current) || 0;
+    const p = Number(comp.power) || 0;
+    const type = comp.type;
+
+    if (type === "V") {
+      // Voltage source: current leaves positive terminal (n1) into circuit
+      nodeCurrents[n1] = (nodeCurrents[n1] || 0) - i;
+      nodeCurrents[n2] = (nodeCurrents[n2] || 0) + i;
+      sourcePower += p;
+    } else if (type === "I") {
+      // Current source: flows n1 to n2; power delivered is -(v_drop * current)
+      nodeCurrents[n1] = (nodeCurrents[n1] || 0) + i;
+      nodeCurrents[n2] = (nodeCurrents[n2] || 0) - i;
+      sourcePower -= p;
+    } else if (type === "R") {
+      // Resistor: flows n1 to n2
+      nodeCurrents[n1] = (nodeCurrents[n1] || 0) + i;
+      nodeCurrents[n2] = (nodeCurrents[n2] || 0) - i;
+      resistorPower += p;
+    }
+  }
+
+  // Sum of currents at every node is about 0 (within numeric tolerance)
+  for (const sumI of Object.values(nodeCurrents)) {
+    if (Math.abs(sumI) > 1e-7) return false;
+  }
+
+  // Source power equals resistor power within 1e-9 relative
+  const maxP = Math.max(Math.abs(sourcePower), Math.abs(resistorPower), 1e-12);
+  const relDiff = Math.abs(sourcePower - resistorPower) / maxP;
+  if (relDiff > 1e-9) return false;
+
+  return true;
+}
 
 // Main Render Function
 function renderAnalysis(data) {
   emptyState.style.display = "none";
   analysisTab.style.display = "block";
-  analysisSubtitle.textContent = "Deterministic solution computed";
 
   // Update Netlist Editor
   netlistEditor.value = JSON.stringify(data.final_netlist || {}, null, 2);
 
-  // Status Banner
-  if (data.is_valid && data.solved) {
+  // Status Banner with verbatim Code and Message
+  const code = data.code || (data.is_valid ? "OK" : "VALIDATION_FAILED");
+  const msg = data.message || (data.validation_errors || []).join(" | ") || data.solver_error || "Analysis complete.";
+  const statusIconBox = document.getElementById("statusIconBox");
+
+  // Subtitle: only show "Deterministic solution computed" when status is OK
+  if (code === "OK" && data.is_valid && data.solved) {
+    analysisSubtitle.textContent = "Deterministic solution computed";
+  } else {
+    analysisSubtitle.textContent = msg;
+  }
+
+  if (code === "OK" && data.is_valid && data.solved) {
     statusBanner.className = "status-banner banner-success";
-    statusTitle.textContent = "Circuit Verified & Numerically Solved";
-    statusDesc.textContent = `All deterministic electrical checks passed. ${data.repairs_needed ? `Repaired in ${data.repairs_needed} iteration(s).` : "Zero repairs required."}`;
-    bannerMeta.style.display = "flex";
+    statusTitle.textContent = "Solved: checks passed";
+    statusDesc.innerHTML = `<span>${escapeHtml(msg)}</span><div class="banner-subline" style="margin-top: 4px; font-size: 13px; opacity: 0.85;">Compare the Visual Schematic with your photo to confirm the reading.</div>`;
+    if (statusIconBox) {
+      statusIconBox.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>';
+    }
+    // Real check: show KCL/KVL badge only if exact check passes
+    const kclKvlExact = checkKclKvlExact(data.solved);
+    bannerMeta.style.display = kclKvlExact ? "flex" : "none";
+  } else if (code === "VALUES_MISSING") {
+    statusBanner.className = "status-banner banner-warning";
+    statusTitle.textContent = "Values Missing [VALUES_MISSING]";
+    statusDesc.textContent = msg;
+    if (statusIconBox) {
+      statusIconBox.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>';
+    }
+    bannerMeta.style.display = "none";
+    // Auto-focus Netlist JSON editor so user can enter values and re-solve
+    const netlistTabBtn = document.querySelector('.tab-btn[data-tab="netlistTab"]');
+    if (netlistTabBtn) netlistTabBtn.click();
   } else {
     statusBanner.className = "status-banner banner-error";
-    statusTitle.textContent = "Verification Failed";
-    statusDesc.textContent = (data.validation_errors || []).join(" | ") || data.solver_error || "Check netlist syntax";
+    statusTitle.textContent = `Verification Failed [${code}]`;
+    statusDesc.textContent = msg;
+    if (statusIconBox) {
+      statusIconBox.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>';
+    }
     bannerMeta.style.display = "none";
   }
+
 
   // Uncertainties
   const uncertain = data.final_netlist?.uncertain || [];

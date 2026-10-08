@@ -12,7 +12,12 @@ from solver import solve_circuit, SolverError
 from gemma_client import (
     extract_netlist_from_image,
     repair_netlist_from_image,
-    explain_student_mistake
+    explain_student_mistake,
+    check_unsupported_components,
+    GemmaTimeoutError,
+    GemmaAPIError,
+    GemmaBadJSONError,
+    GemmaUnsupportedComponentError
 )
 
 app = FastAPI(title="CircuitCheck API", description="DC Circuit Multimodal Extractor & Verifier")
@@ -41,11 +46,11 @@ def health():
 @app.post("/api/read")
 async def read_circuit(file: UploadFile = File(...)):
     """
-    1. Reads circuit image.
-    2. Calls Gemma to extract JSON netlist.
-    3. Runs deterministic validators.
-    4. If validation fails, triggers closed-loop repair (max 2 rounds).
-    5. Solves with Modified Nodal Analysis (MNA).
+    1. Reads & downscales circuit image.
+    2. Calls Gemma to extract JSON netlist with timeout & retries.
+    3. Runs deterministic validators and closed-loop repair.
+    4. Solves with Modified Nodal Analysis (MNA).
+    5. Returns exact status code: OK, TIMEOUT, API_ERROR, BAD_JSON, UNSUPPORTED_COMPONENT, VALIDATION_FAILED.
     """
     contents = await file.read()
     if not contents:
@@ -57,8 +62,114 @@ async def read_circuit(file: UploadFile = File(...)):
     # Round 1: Initial Extraction
     try:
         netlist = extract_netlist_from_image(contents, mime_type=mime_type)
+    except GemmaTimeoutError as e:
+        return {
+            "code": "TIMEOUT",
+            "message": str(e) or "Request to Gemma vision model timed out.",
+            "is_valid": False,
+            "final_netlist": None,
+            "validation_errors": ["Extraction request timed out."],
+            "solver_error": "Timeout during vision extraction.",
+            "solved": None,
+            "rounds_log": [{"round": 1, "action": "initial_extraction", "passed": False, "error": "TIMEOUT"}],
+            "repairs_needed": 0
+        }
+    except GemmaBadJSONError as e:
+        return {
+            "code": "BAD_JSON",
+            "message": str(e) or "Gemma model response was not valid netlist JSON.",
+            "is_valid": False,
+            "final_netlist": None,
+            "validation_errors": ["Invalid JSON netlist returned."],
+            "solver_error": "JSON parse error.",
+            "solved": None,
+            "rounds_log": [{"round": 1, "action": "initial_extraction", "passed": False, "error": "BAD_JSON"}],
+            "repairs_needed": 0
+        }
+    except GemmaUnsupportedComponentError as e:
+        return {
+            "code": "UNSUPPORTED_COMPONENT",
+            "message": str(e),
+            "is_valid": False,
+            "final_netlist": e.netlist,
+            "validation_errors": [str(e)],
+            "solver_error": "Unsupported non-linear or reactive component detected.",
+            "solved": None,
+            "rounds_log": [{"round": 1, "action": "initial_extraction", "passed": False, "error": "UNSUPPORTED_COMPONENT"}],
+            "repairs_needed": 0
+        }
+    except GemmaAPIError as e:
+        return {
+            "code": "API_ERROR",
+            "message": str(e) or "AI Vision API service error.",
+            "is_valid": False,
+            "final_netlist": None,
+            "validation_errors": [str(e)],
+            "solver_error": "Vision API failure.",
+            "solved": None,
+            "rounds_log": [{"round": 1, "action": "initial_extraction", "passed": False, "error": "API_ERROR"}],
+            "repairs_needed": 0
+        }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Gemma extraction error: {str(e)}")
+        return {
+            "code": "API_ERROR",
+            "message": f"Unexpected digitization error: {str(e)}",
+            "is_valid": False,
+            "final_netlist": None,
+            "validation_errors": [str(e)],
+            "solver_error": str(e),
+            "solved": None,
+            "rounds_log": [{"round": 1, "action": "initial_extraction", "passed": False, "error": str(e)}],
+            "repairs_needed": 0
+        }
+
+    # Verify linear DC components
+    unsupported_msg = check_unsupported_components(netlist)
+    if unsupported_msg:
+        return {
+            "code": "UNSUPPORTED_COMPONENT",
+            "message": unsupported_msg,
+            "is_valid": False,
+            "final_netlist": netlist,
+            "validation_errors": [unsupported_msg],
+            "solver_error": "Circuit contains unsupported components.",
+            "solved": None,
+            "rounds_log": [{"round": 1, "action": "component_check", "passed": False, "error": unsupported_msg}],
+            "repairs_needed": 0
+        }
+
+    # Check for symbolic / missing numeric values (VALUES_MISSING) BEFORE running validators
+    components = netlist.get("components", []) if isinstance(netlist, dict) else []
+    missing_symbols: List[str] = []
+    symbolic_list = netlist.get("symbolic", []) if isinstance(netlist, dict) else []
+
+    for comp in components:
+        if comp.get("value") is None:
+            lbl = comp.get("label") or comp.get("id")
+            if lbl and lbl not in missing_symbols:
+                missing_symbols.append(lbl)
+
+    for sym in symbolic_list:
+        if sym and sym not in missing_symbols:
+            missing_symbols.append(sym)
+
+    has_null_values = any(comp.get("value") is None for comp in components)
+    has_symbolic_list = bool(symbolic_list and len(symbolic_list) > 0)
+
+    if has_null_values or has_symbolic_list:
+        sym_str = ", ".join(missing_symbols) if missing_symbols else "E, R1, R2"
+        msg = f"The drawing has symbols but no numbers ({sym_str}). Enter values and re-simulate."
+        return {
+            "code": "VALUES_MISSING",
+            "message": msg,
+            "is_valid": False,
+            "final_netlist": netlist,
+            "validation_errors": [msg],
+            "solver_error": None,
+            "solved": None,
+            "rounds_log": [{"round": 1, "action": "symbolic_check", "passed": False, "status": "VALUES_MISSING"}],
+            "repairs_needed": 0
+        }
 
     validation_errors = validate_netlist(netlist)
     rounds_log.append({
@@ -69,9 +180,9 @@ async def read_circuit(file: UploadFile = File(...)):
         "passed": len(validation_errors) == 0
     })
 
-    # Closed-loop Repair (Max 2 repair rounds)
+    # Closed-loop Repair (1 repair round for speed)
     repair_count = 0
-    max_repairs = 2
+    max_repairs = 1
 
     while len(validation_errors) > 0 and repair_count < max_repairs:
         repair_count += 1
@@ -82,6 +193,19 @@ async def read_circuit(file: UploadFile = File(...)):
                 validation_errors=validation_errors,
                 mime_type=mime_type
             )
+            unsupported_msg = check_unsupported_components(netlist)
+            if unsupported_msg:
+                return {
+                    "code": "UNSUPPORTED_COMPONENT",
+                    "message": unsupported_msg,
+                    "is_valid": False,
+                    "final_netlist": netlist,
+                    "validation_errors": [unsupported_msg],
+                    "solver_error": "Circuit contains unsupported components.",
+                    "solved": None,
+                    "rounds_log": rounds_log,
+                    "repairs_needed": repair_count
+                }
             validation_errors = validate_netlist(netlist)
             rounds_log.append({
                 "round": repair_count + 1,
@@ -100,25 +224,51 @@ async def read_circuit(file: UploadFile = File(...)):
             break
 
     # Solve if valid
+    if len(validation_errors) > 0:
+        return {
+            "code": "VALIDATION_FAILED",
+            "message": f"Circuit netlist failed electrical validation rules: {'; '.join(validation_errors)}",
+            "is_valid": False,
+            "final_netlist": netlist,
+            "validation_errors": validation_errors,
+            "solver_error": "Circuit netlist failed validation checks.",
+            "solved": None,
+            "rounds_log": rounds_log,
+            "repairs_needed": repair_count
+        }
+
     solved_result = None
     solver_error = None
-    if len(validation_errors) == 0:
-        try:
-            solved_result = solve_circuit(netlist)
-        except SolverError as se:
-            solver_error = str(se)
-    else:
-        solver_error = "Circuit netlist failed validation checks."
+    try:
+        solved_result = solve_circuit(netlist)
+    except SolverError as se:
+        solver_error = str(se)
+
+    if solver_error:
+        return {
+            "code": "VALIDATION_FAILED",
+            "message": f"Numerical solver failed: {solver_error}",
+            "is_valid": False,
+            "final_netlist": netlist,
+            "validation_errors": [solver_error],
+            "solver_error": solver_error,
+            "solved": None,
+            "rounds_log": rounds_log,
+            "repairs_needed": repair_count
+        }
 
     return {
-        "is_valid": len(validation_errors) == 0 and solver_error is None,
+        "code": "OK",
+        "message": f"Circuit verified and solved successfully with 0 errors.{f' (Fixed in {repair_count} repair round)' if repair_count else ''}",
+        "is_valid": True,
         "final_netlist": netlist,
-        "validation_errors": validation_errors,
-        "solver_error": solver_error,
+        "validation_errors": [],
+        "solver_error": None,
         "solved": solved_result,
         "rounds_log": rounds_log,
         "repairs_needed": repair_count
     }
+
 
 @app.post("/api/solve")
 async def solve_manual_netlist(payload: NetlistRequest):

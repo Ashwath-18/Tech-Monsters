@@ -106,5 +106,37 @@ class TestCircuitSolver(unittest.TestCase):
         with self.assertRaises(SolverError):
             solve_circuit(netlist)
 
+    def test_voltage_source_reversed_polarity_flips_node_voltages(self):
+        """Swapping the two nodes of a 10V voltage source flips the sign of every node voltage."""
+        # Standard polarity: V1 nodes = ["N1", "0"] -> V(N1) = +10V, V(N2) = +5V
+        netlist_standard = {
+            "components": [
+                {"id": "V1", "type": "V", "value": 10.0, "nodes": ["N1", "0"]},
+                {"id": "R1", "type": "R", "value": 1000.0, "nodes": ["N1", "N2"]},
+                {"id": "R2", "type": "R", "value": 1000.0, "nodes": ["N2", "0"]}
+            ]
+        }
+        res_std = solve_circuit(netlist_standard)
+        self.assertEqual(res_std["node_voltages"]["N1"], 10.0)
+        self.assertEqual(res_std["node_voltages"]["N2"], 5.0)
+        self.assertEqual(res_std["node_voltages"]["0"], 0.0)
+
+        # Reversed polarity: V1 nodes = ["0", "N1"] -> V(N1) = -10V, V(N2) = -5V
+        netlist_reversed = {
+            "components": [
+                {"id": "V1", "type": "V", "value": 10.0, "nodes": ["0", "N1"]},
+                {"id": "R1", "type": "R", "value": 1000.0, "nodes": ["N1", "N2"]},
+                {"id": "R2", "type": "R", "value": 1000.0, "nodes": ["N2", "0"]}
+            ]
+        }
+        res_rev = solve_circuit(netlist_reversed)
+        self.assertEqual(res_rev["node_voltages"]["0"], 0.0)
+
+        # Every node voltage must have flipped sign
+        for node, v_std in res_std["node_voltages"].items():
+            self.assertIn(node, res_rev["node_voltages"])
+            v_rev = res_rev["node_voltages"][node]
+            self.assertAlmostEqual(v_rev, -v_std, places=5)
+
 if __name__ == "__main__":
     unittest.main()
