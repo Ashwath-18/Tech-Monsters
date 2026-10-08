@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>VyaparLens - Handwritten Bill to Digital Ledger</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      max-width: 800px;
+      margin: 40px auto;
+      padding: 0 20px;
+      line-height: 1.6;
+      color: #333;
+    }
+    h1 {
+      color: #111;
+      margin-bottom: 8px;
+    }
+    p.subtitle {
+      color: #666;
+      margin-top: 0;
+      margin-bottom: 24px;
+    }
+    .upload-box {
+      border: 2px dashed #ccc;
+      border-radius: 8px;
+      padding: 32px;
+      text-align: center;
+      background: #fafafa;
+      margin-bottom: 24px;
+    }
+    button {
+      background: #2563eb;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      font-size: 16px;
+      border-radius: 6px;
+      cursor: pointer;
+      margin-top: 12px;
+    }
+    button:hover {
+      background: #1d4ed8;
+    }
+    #results {
+      margin-top: 24px;
+      padding: 16px;
+      border: 1px solid #e5e7eb;
+      border-radius: 6px;
+      background: #fff;
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <h1>VyaparLens</h1>
+  <p class="subtitle">Handwritten Indian Bill to Audited Digital Ledger</p>
+
+  <div class="upload-box">
+    <input type="file" id="billInput" accept="image/*" />
+    <br />
+    <button id="uploadBtn">Upload & Extract</button>
+  </div>
+
+  <div id="results">
+    <h3>Extraction Results</h3>
+    <pre id="outputJson">Results will appear here...</pre>
+  </div>
+
+  <script>
+    const uploadBtn = document.getElementById("uploadBtn");
+    const billInput = document.getElementById("billInput");
+    const results = document.getElementById("results");
+    const outputJson = document.getElementById("outputJson");
+
+    uploadBtn.addEventListener("click", async () => {
+      if (!billInput.files.length) {
+        alert("Please select a bill image first.");
+        return;
+      }
+
+      const file = billInput.files[0];
+      const formData = new FormData();
+      formData.append("file", file);
+
+      outputJson.textContent = "Processing bill with Gemma...";
+      results.style.display = "block";
+
+      try {
+        const res = await fetch("http://localhost:8000/extract", {
+          method: "POST",
+          body: formData,
+        });
+        const data = await res.json();
+        outputJson.textContent = JSON.stringify(data, null, 2);
+      } catch (err) {
+        outputJson.textContent = "Error: " + err.message;
+      }
+    });
+  </script>
+</body>
+</html>
